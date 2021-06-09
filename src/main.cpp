@@ -8,6 +8,7 @@
 #include "RTClib.h"
 
 #define DEBUG
+#define doorOpenSwitch 6
 #define relay1 7
 #define relay2 8
 #define buzzer 13   // 9
@@ -95,6 +96,10 @@ uint8_t tag;
 uint8_t monat;
 uint8_t stunde;
 uint8_t minute;
+unsigned long previousMillis = 0;
+const unsigned long interval = 60000;    // Alle "interval" Millisekunden Schaltpukte prüfen
+enum class DState {closed, open, undefined};
+DState doorState = DState::undefined;
 
 String getTimeStamp() {
   DateTime now = rtc.now();           // Get actual timestamp from RTC
@@ -213,8 +218,12 @@ void parseCommand(String com)
 }
 
 void signal() {
+  #ifdef DEBUG
+    Serial.println("Signal ausgelöst.");
+  #endif
+
   uint8_t count = 5;
-  while(count > 0) {
+  while (count > 0) {
     count--;
     digitalWrite(buzzer, HIGH);
     delay(500);
@@ -224,30 +233,82 @@ void signal() {
 }
 
 void doorOpen() {
-  signal();
-  delay(5000);
-  digitalWrite(relay1, LOW);
-  digitalWrite(relay2, HIGH);
-  delay(90000);
-  digitalWrite(relay1, HIGH);
-  digitalWrite(relay2, HIGH);
+  if (doorState == DState::undefined || doorState == DState::closed) {
+    #ifdef DEBUG
+      Serial.println("Türe öffnen ...");
+    #endif
+    signal();
+    delay(5000);
+    digitalWrite(relay1, LOW);
+    digitalWrite(relay2, HIGH);
+    delay(90000);
+    digitalWrite(relay1, HIGH);
+    digitalWrite(relay2, HIGH);
+    doorState = DState::open;
+    #ifdef DEBUG
+      Serial.println("Türe geöffnet.");
+    #endif
+  }
 }
 
 void doorClose() {
-  signal();
-  delay(5000);
-  digitalWrite(relay1, HIGH);
-  digitalWrite(relay2, LOW);
-  delay(90000);
-  digitalWrite(relay1, HIGH);
-  digitalWrite(relay2, HIGH);
+  if (doorState == DState::undefined || doorState == DState::open) {
+    #ifdef DEBUG
+      Serial.println("Türe schliessen...");
+    #endif
+    signal();
+    delay(5000);
+    digitalWrite(relay1, HIGH);
+    digitalWrite(relay2, LOW);
+    delay(90000);
+    digitalWrite(relay1, HIGH);
+    digitalWrite(relay2, HIGH);
+    doorState = DState::closed;
+    #ifdef DEBUG
+      Serial.println("Türe geschlossen.");
+    #endif
+  }
 }
 
-void switchPressed() {
-  
+void checkStatus() {
+  dtakt = RTC_DS3231::now();
+  monat = dtakt.month() - 1;  // Minus 1 wegen Array
+  tag = dtakt.day() - 1;      // Minus 1 wegen Array
+  stunde = dtakt.hour();
+  minute = dtakt.minute();
+
+  uint8_t sr_h = dt[monat][tag][0];   // Sonnenaufgangs Stunde
+  uint8_t sr_m = dt[monat][tag][1];   // Sonnenaufgangs Minute
+  uint8_t ss_h = dt[monat][tag][2];   // Sonnenuntergangs Stunde
+  uint8_t ss_m = dt[monat][tag][3];   // Sonnenuntergangs Minute
+
+  if (sr_h > stunde) {
+    doorClose();
+  } else if (sr_h == stunde) {
+    if(sr_m > minute) {
+      doorClose();
+    } else if (sr_m <= minute) {
+      doorOpen();
+    }
+  } else {
+    if (ss_h > stunde) {
+      doorOpen();
+    } else if (ss_h == stunde) {
+      if (ss_m > minute) {
+        doorOpen();
+      } else if (ss_m <= minute) {
+        doorClose();
+      }
+    } else {
+      doorClose();
+    }
+  }
+
 }
+
 void setup() {
   Serial.begin(115200);
+  pinMode(doorOpenSwitch, INPUT_PULLUP);
   pinMode(relay1, OUTPUT);
   digitalWrite(relay1, HIGH);
   pinMode(relay2, OUTPUT);
@@ -257,7 +318,7 @@ void setup() {
   pinMode(timeset, INPUT_PULLUP);
   
   if (! rtc.begin()) {
-    Serial.println(F("Couldn't find RTC"));
+    Serial.println(F("Kann RTC Modul nicht finden!"));
     Serial.flush();
     abort();
   }
@@ -273,44 +334,25 @@ void setup() {
       }
     }
   }
+
+  #ifdef DEBUG
+    Serial.println("Aktiviert: Überprüfe Status ...");
+  #endif
+  checkStatus();
 }
 
 void loop() {
-  #ifdef DEBUG
-    Serial.println(getTimeStamp());
-  #endif
-  dtakt = RTC_DS3231::now();
-  monat = dtakt.month() - 1;  // Minus 1 wegen Array
-  tag = dtakt.day() - 1;      // Minus 1 wegen Array
-  stunde = dtakt.hour();
-  minute = dtakt.minute();
+  unsigned long currentMillis = millis();
   
-  
-  #ifdef DEBUG
-    Serial.print(F("Türe öffnen: "));
-    if(dt[monat][tag][0] < 10) Serial.print('0');
-    Serial.print(dt[monat][tag][0], DEC);
-    Serial.print(':');
-    if(dt[monat][tag][1] < 10) Serial.print('0');
-    Serial.println(dt[monat][tag][1], DEC);
-    Serial.print(F("Türe schliesen: "));
-    if(dt[monat][tag][2] < 10) Serial.print('0');
-    Serial.print(dt[monat][tag][2], DEC);
-    Serial.print(':');
-    if(dt[monat][tag][3] < 10) Serial.print('0');
-    Serial.println(dt[monat][tag][3], DEC);
-  #endif
-
-  if(dt[monat][tag][0] == stunde) {
-    if(dt[monat][tag][1] == minute) {
+  if (digitalRead(doorOpenSwitch) == LOW) {
+    delay(50);
+    while (digitalRead(doorOpenSwitch) == LOW) {
       doorOpen();
     }
   }
-  if(dt[monat][tag][2] == stunde) {
-    if(dt[monat][tag][3] == minute) {
-      doorClose();
-    }
-  }
   
-  delay(30000);
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    checkStatus();
+  }
 }
