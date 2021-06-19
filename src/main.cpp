@@ -11,7 +11,7 @@
 #define doorOpenSwitch 6
 #define relay1 7
 #define relay2 8
-#define buzzer 13   // 9
+#define buzzer 9
 #define timeset 10
 #define timeoffset 1800   // Offset +- Sekunden für Öffnungszeiten
 
