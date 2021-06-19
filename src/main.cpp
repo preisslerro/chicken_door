@@ -13,6 +13,7 @@
 #define relay2 8
 #define buzzer 13   // 9
 #define timeset 10
+#define timeoffset 1800   // Offset +- Sekunden für Öffnungszeiten
 
 const uint8_t dt[12][31][4] = 
 // Januar
@@ -155,7 +156,7 @@ void parseCommand(String com)
 
   if (com.equalsIgnoreCase("rtc"))                  // If command is "rtc"
   {
-    Serial.println(F("Datum und Uhrzeit - in Winterzeit - eingeben (Muster: 2021-12-31 23:59:59): "));
+    Serial.println(F("Datum und Uhrzeit - in Normalzeit (Winterzeit) - eingeben (Muster: 2021-12-31 23:59:59): "));
     while (true)
     {
       if (Serial.available())
@@ -271,7 +272,7 @@ void doorClose() {
 }
 
 void checkStatus() {
-  dtakt = RTC_DS3231::now();
+  dtakt = (RTC_DS3231::now() + TimeSpan(timeoffset));
   monat = dtakt.month() - 1;  // Minus 1 wegen Array
   tag = dtakt.day() - 1;      // Minus 1 wegen Array
   stunde = dtakt.hour();
