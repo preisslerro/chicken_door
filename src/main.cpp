@@ -272,7 +272,12 @@ void doorClose() {
 }
 
 void checkStatus() {
-  dtakt = (RTC_DS3231::now() + TimeSpan(timeoffset));
+  dtakt = (RTC_DS3231::now() + TimeSpan(-timeoffset));
+  #ifdef DEBUG
+  Serial.print(dtakt.hour());
+  Serial.print(":");
+  Serial.println(dtakt.minute());
+  #endif
   monat = dtakt.month() - 1;  // Minus 1 wegen Array
   tag = dtakt.day() - 1;      // Minus 1 wegen Array
   stunde = dtakt.hour();
