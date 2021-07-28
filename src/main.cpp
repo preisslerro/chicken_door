@@ -8,27 +8,29 @@
 #include "RTClib.h"
 
 #define DEBUG
-#define doorOpenSwitch 6
-#define relay1 7
-#define relay2 8
-#define buzzer 9
-#define timeset 10
-#define timeoffset 1800   // Offset +- Sekunden für Öffnungszeiten
+#define doorLEDOpen 2       // LED open indicator (from pin over resistor to ground)
+#define doorLEDClose 3      // LED closed indicator (from pin over resistor to ground)
+#define doorOpenSwitch 6    // Switch pin (from pin to GND or +5V) to override timed function and open the door 
+#define relay1 7            // 1st bridge relay for linear drive 
+#define relay2 8            // 2nd bridge relay for linear drive
+#define buzzer 9            // Pin whre buzzer is connected
+#define timeset 10          // Pin to read/set actual time of the RTC module
+#define timeoffset 1800     // Manual offset +- seconds for open/close times
 
 const uint8_t dt[12][31][4] = 
-// Januar
+// January
 {{{8,3,16,25},{8,3,16,26},{8,3,16,27},{8,3,16,28},{8,2,16,30},{8,2,16,31},{8,2,16,32},
 {8,2,16,33},{8,1,16,34},{8,1,16,36},{8,0,16,37},{8,0,16,38},{7,59,16,39},{7,59,16,41},
 {7,58,16,42},{7,57,16,44},{7,56,16,45},{7,56,16,47},{7,55,16,48},{7,54,16,50},{7,53,16,51},
 {7,52,16,53},{7,51,16,54},{7,50,16,56},{7,49,16,57},{7,48,16,59},{7,47,17,0},{7,45,17,2},
 {7,44,17,4},{7,43,17,5},{7,41,17,7}},
-// Februar
+// February
 {{7,40,17,9},{7,39,17,10},{7,37,17,12},{7,36,17,13},{7,34,17,15},{7,33,17,17},{7,31,17,18},
 {7,30,17,20},{7,28,17,22},{7,27,17,23},{7,25,17,25},{7,23,17,27},{7,22,17,28},{7,20,17,30},
 {7,18,17,32},{7,17,17,33},{7,15,17,35},{7,13,17,37},{7,11,17,38},{7,9,17,40},{7,8,17,41},
 {7,6,17,43},{7,4,17,45},{7,2,17,46},{7,0,17,48},{6,58,17,50},{6,56,17,51},{6,54,17,53},
 {6,52,17,54},{0,0,0,0},{0,0,0,0}},
-// März
+// March
 {{6,50,17,56},{6,48,17,58},{6,46,17,59},{6,44,18,1},{6,42,18,2},{6,40,18,4},{6,38,18,5},
 {6,36,18,7},{6,34,18,9},{6,32,18,10},{6,30,18,12},{6,28,18,13},{6,26,18,15},{6,24,18,16},
 {6,21,18,18},{6,19,18,19},{6,17,18,21},{6,15,18,22},{6,13,18,24},{6,11,18,25},{6,9,18,27},
@@ -40,19 +42,19 @@ const uint8_t dt[12][31][4] =
 {5,17,19,5},{5,15,19,6},{5,13,19,8},{5,11,19,9},{5,9,19,11},{5,7,19,12},{5,5,19,14},
 {5,3,19,15},{5,1,19,17},{5,0,19,18},{4,58,19,20},{4,56,19,21},{4,54,19,23},{4,52,19,24},
 {4,51,19,26},{4,49,19,27},{0,0,0,0}},
-// Mai
+// May
 {{4,47,19,29},{4,46,19,30},{4,44,19,32},{4,42,19,33},{4,41,19,34},{4,39,19,36},{4,37,19,37},
 {4,36,19,39},{4,34,19,40},{4,33,19,42},{4,31,19,43},{4,30,19,44},{4,29,19,46},{4,27,19,47},
 {4,26,19,48},{4,25,19,50},{4,23,19,51},{4,22,19,52},{4,21,19,54},{4,20,19,55},{4,19,19,56},
 {4,18,19,58},{4,16,19,59},{4,15,20,0},{4,15,20,1},{4,14,20,2},{4,13,20,3},{4,12,20,5},
 {4,11,20,6},{4,10,20,7},{4,10,20,8}},
-// Juni
+// June
 {{4,9,20,9},{4,8,20,10},{4,8,20,11},{4,7,20,11},{4,7,20,12},{4,6,20,13},{4,6,20,14},
 {4,5,20,15},{4,5,20,15},{4,5,20,16},{4,4,20,17},{4,4,20,17},{4,4,20,18},{4,4,20,18},
 {4,4,20,19},{4,4,20,19},{4,4,20,20},{4,4,20,20},{4,4,20,20},{4,4,20,21},{4,5,20,21},
 {4,5,20,21},{4,5,20,21},{4,6,20,21},{4,6,20,21},{4,6,20,21},{4,7,20,21},{4,7,20,21},
 {4,8,20,21},{4,9,20,21},{0,0,0,0}},
-// Juli
+// July
 {{4,9,20,20},{4,10,20,20},{4,11,20,20},{4,11,20,19},{4,12,20,19},{4,13,20,19},{4,14,20,18},
 {4,15,20,17},{4,16,20,17},{4,16,20,16},{4,17,20,15},{4,18,20,15},{4,19,20,14},{4,20,20,13},
 {4,22,20,12},{4,23,20,11},{4,24,20,10},{4,25,20,9},{4,26,20,8},{4,27,20,7},{4,28,20,6},
@@ -70,7 +72,7 @@ const uint8_t dt[12][31][4] =
 {5,47,18,25},{5,48,18,23},{5,49,18,21},{5,51,18,19},{5,52,18,17},{5,54,18,15},{5,55,18,12},
 {5,57,18,10},{5,58,18,8},{5,59,18,6},{6,1,18,4},{6,2,18,2},{6,4,18,0},{6,5,17,57},
 {6,7,17,55},{6,8,17,53},{0,0,0,0}},
-// Oktober
+// October
 {{6,10,17,51},{6,11,17,49},{6,13,17,47},{6,14,17,45},{6,16,17,43},{6,17,17,41},{6,18,17,39},
 {6,20,17,37},{6,21,17,34},{6,23,17,32},{6,24,17,30},{6,26,17,28},{6,28,17,26},{6,29,17,24},
 {6,31,17,22},{6,32,17,21},{6,34,17,19},{6,35,17,17},{6,37,17,15},{6,38,17,13},{6,40,17,11},
@@ -82,7 +84,7 @@ const uint8_t dt[12][31][4] =
 {7,19,16,32},{7,21,16,31},{7,22,16,29},{7,24,16,28},{7,25,16,27},{7,27,16,26},{7,28,16,25},
 {7,30,16,24},{7,31,16,23},{7,33,16,23},{7,34,16,22},{7,35,16,21},{7,37,16,20},{7,38,16,20},
 {7,40,16,19},{7,41,16,18},{0,0,0,0}},
-// Dezember
+// December
 {{7,42,16,18},{7,43,16,17},{7,45,16,17},{7,46,16,17},{7,47,16,16},{7,48,16,16},{7,49,16,16},
 {7,50,16,16},{7,51,16,15},{7,52,16,15},{7,53,16,15},{7,54,16,15},{7,55,16,15},{7,56,16,16},
 {7,57,16,16},{7,57,16,16},{7,58,16,16},{7,59,16,17},{7,59,16,17},{8,0,16,17},{8,0,16,18},
@@ -95,10 +97,10 @@ RTC_DS3231 rtc;
 DateTime dtakt;
 uint8_t tag;
 uint8_t monat;
-uint8_t stunde;
+uint8_t hour;
 uint8_t minute;
 unsigned long previousMillis = 0;
-const unsigned long interval = 60000;    // Alle "interval" Millisekunden Schaltpukte prüfen
+const unsigned long interval = 60000;    // Check all "intervall" milliseconds door open/close switching points
 enum class DState {closed, open, undefined};
 DState doorState = DState::undefined;
 
@@ -220,7 +222,7 @@ void parseCommand(String com)
 
 void signal() {
   #ifdef DEBUG
-    Serial.println("Signal ausgelöst.");
+    Serial.println("Signal aktivated.");
   #endif
 
   uint8_t count = 5;
@@ -236,7 +238,7 @@ void signal() {
 void doorOpen() {
   if (doorState == DState::undefined || doorState == DState::closed) {
     #ifdef DEBUG
-      Serial.println("Türe öffnen ...");
+      Serial.println("Open the door ...");
     #endif
     signal();
     delay(5000);
@@ -247,7 +249,7 @@ void doorOpen() {
     digitalWrite(relay2, HIGH);
     doorState = DState::open;
     #ifdef DEBUG
-      Serial.println("Türe geöffnet.");
+      Serial.println("Door opened.");
     #endif
   }
 }
@@ -255,7 +257,7 @@ void doorOpen() {
 void doorClose() {
   if (doorState == DState::undefined || doorState == DState::open) {
     #ifdef DEBUG
-      Serial.println("Türe schliessen...");
+      Serial.println("Close the door...");
     #endif
     signal();
     delay(5000);
@@ -266,7 +268,7 @@ void doorClose() {
     digitalWrite(relay2, HIGH);
     doorState = DState::closed;
     #ifdef DEBUG
-      Serial.println("Türe geschlossen.");
+      Serial.println("Door closed.");
     #endif
   }
 }
@@ -278,28 +280,28 @@ void checkStatus() {
   Serial.print(":");
   Serial.println(dtakt.minute());
   #endif
-  monat = dtakt.month() - 1;  // Minus 1 wegen Array
-  tag = dtakt.day() - 1;      // Minus 1 wegen Array
-  stunde = dtakt.hour();
+  monat = dtakt.month() - 1;  // Minus 1 because of array
+  tag = dtakt.day() - 1;      // Minus 1 because of array
+  hour = dtakt.hour();
   minute = dtakt.minute();
 
-  uint8_t sr_h = dt[monat][tag][0];   // Sonnenaufgangs Stunde
-  uint8_t sr_m = dt[monat][tag][1];   // Sonnenaufgangs Minute
-  uint8_t ss_h = dt[monat][tag][2];   // Sonnenuntergangs Stunde
-  uint8_t ss_m = dt[monat][tag][3];   // Sonnenuntergangs Minute
+  uint8_t sr_h = dt[monat][tag][0];   // Sunrise hour
+  uint8_t sr_m = dt[monat][tag][1];   // Sunrise minute
+  uint8_t ss_h = dt[monat][tag][2];   // Sunset hour
+  uint8_t ss_m = dt[monat][tag][3];   // Sunset minute
 
-  if (sr_h > stunde) {
+  if (sr_h > hour) {
     doorClose();
-  } else if (sr_h == stunde) {
+  } else if (sr_h == hour) {
     if(sr_m > minute) {
       doorClose();
     } else if (sr_m <= minute) {
       doorOpen();
     }
   } else {
-    if (ss_h > stunde) {
+    if (ss_h > hour) {
       doorOpen();
-    } else if (ss_h == stunde) {
+    } else if (ss_h == hour) {
       if (ss_m > minute) {
         doorOpen();
       } else if (ss_m <= minute) {
@@ -310,10 +312,24 @@ void checkStatus() {
     }
   }
 
+  if (doorState == DState::open) {              // Switch on only door-open LED if door is open.
+    digitalWrite(doorLEDOpen, HIGH);
+    digitalWrite(doorLEDClose, LOW);
+  } else if (doorState == DState::closed) {     // Switch on only door-close LED if door is closed.
+    digitalWrite(doorLEDOpen, LOW);
+    digitalWrite(doorLEDClose, HIGH);
+  } else if (doorState == DState::undefined) {  // Switch off both LEDs if door state is unknown.
+    digitalWrite(doorLEDOpen, LOW);
+    digitalWrite(doorLEDClose, LOW);
+  }
 }
 
 void setup() {
   Serial.begin(115200);
+  pinMode(doorLEDOpen, OUTPUT);
+  digitalWrite(doorLEDOpen, LOW);
+  pinMode(doorLEDClose, OUTPUT);
+  digitalWrite(doorLEDClose, LOW);
   pinMode(doorOpenSwitch, INPUT_PULLUP);
   pinMode(relay1, OUTPUT);
   digitalWrite(relay1, HIGH);
@@ -324,13 +340,13 @@ void setup() {
   pinMode(timeset, INPUT_PULLUP);
   
   if (! rtc.begin()) {
-    Serial.println(F("Kann RTC Modul nicht finden!"));
+    Serial.println(F("Could not find the RTC module!"));
     Serial.flush();
     abort();
   }
 
   if (rtc.lostPower() || digitalRead(timeset) == LOW) {
-    Serial.println(F("Kommando eingeben (info / rtc):\n"));
+    Serial.println(F("Input command (info / rtc):\n"));
     while (true) {
       if (Serial.available()) {
         serCommand = Serial.readStringUntil('\n');
@@ -342,7 +358,7 @@ void setup() {
   }
 
   #ifdef DEBUG
-    Serial.println("Aktiviert: Überprüfe Status ...");
+    Serial.println("Active: check status ...");
   #endif
   checkStatus();
 }
