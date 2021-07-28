@@ -272,7 +272,7 @@ void doorClose() {
 }
 
 void checkStatus() {
-  dtakt = (RTC_DS3231::now() + TimeSpan(-timeoffset));
+  dtakt = (rtc.now() + TimeSpan(-timeoffset));
   #ifdef DEBUG
   Serial.print(dtakt.hour());
   Serial.print(":");
